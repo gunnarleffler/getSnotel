@@ -129,13 +129,14 @@ def getDailyDataFromNRCS (stationNumber, state, param, lookback, staType="SNTL")
   #print (response.info())
   data = minidom.parseString(response.read())
   curdate = startdate
+  for node in data.getElementsByTagName('beginDate'):
+    curdate = datetime.datetime.strptime(node.firstChild.nodeValue,"%Y-%m-%d %H:%M:%S")
   for node in data.getElementsByTagName('values'):
     curval = node.firstChild.nodeValue
     output.append([curdate,curval])
     curdate += datetime.timedelta(days=1)
   response.close()
   return output
-
 
 def getMetaDataFromNRCS (stationNumber, state, staType):
   output = ""
