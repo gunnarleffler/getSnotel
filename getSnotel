@@ -1,0 +1,206 @@
+#!/usr/bin/env python3
+helpStr = '''
+getSnotel v2.1
+13 June 2013
+Gunnar Leffler
+
+PURPOSE:
+--------
+This utility queries SNOTEL data from the NRCS web service and outputs SHEF.
+
+USAGE:
+------
+REALTIME:
+getSnotel <NRCS Snotel ID> <state code> <local station id> <SHEF physical element codes> <Query Days>
+
+DAILY:
+getSnotel daily <NRCS Snotel ID> <state code> <local station id> <SHEF physical element codes> <Query Days>
+
+The SHEF PE codes can be in any order. Codes currently supported:
+  SW - Snow Water Equivalent
+  SD - Snow Depth
+  PC - Accumulated Precipitation to Date
+  TA - Current Air Temperature
+  TX - Maximum Temperature
+  TN - Minimum Temperature
+
+output is piped to Standard Out (STDOUT).
+
+METADATA:
+getSnotel metadata <NRCS Snotel ID> <state code> <type>
+
+This returns metadata bout a requested snotel station in JSON format
+
+EXAMPLES:
+---------
+REALTIME: getSnotel 302 OR ANRO SWSDPCTATXTN 3days
+DAILY   : getSnotel 302 OR ANRO SWSDPCTATXTN 3days
+METADATA: getSnotel metadata 304 OR SNTL
+
+'''
+import urllib.request, time, datetime, sys, json
+import xml.dom.minidom as minidom
+
+
+###################################################################
+# SOAP request and headers
+###################################################################
+
+#Set our headers
+headers = {
+            'Content-type':'text/soap'
+            }
+
+#program configuration
+config = {
+"wsURL":"http://www.wcc.nrcs.usda.gov/awdbWebService/services?WSDL"
+}
+#Alaiases between SHEF PE and NRCS "Element" codes
+PEalias={"SW":"WTEQ","SD":"SNWD","PC":"PREC","TA":"TOBS","TX":"TMAX","TN":"TMIN"}
+SHEFalias={"SW":"SWIRMZ","SD":"SDIRMZ","PC":"PCIRMZ","TA":"TAIRMZ","TX":"TAIRMX","TN":"TAIRMN"}
+
+params = '''
+<?xml version="1.0" encoding="UTF-8"?>
+<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:q0="http://www.wcc.nrcs.usda.gov/ns/awdbWebService" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <SOAP-ENV:Body>
+    <q0:getHourlyData>
+      <stationTriplets>$TRIPLET$</stationTriplets>
+      <elementCd>$ELEMENT$</elementCd>
+      <ordinal>1</ordinal>
+      <beginDate>$BEGINDATE$</beginDate>
+      <endDate>$ENDDATE$</endDate>
+    </q0:getHourlyData>
+  </SOAP-ENV:Body>
+</SOAP-ENV:Envelope>
+'''.strip()
+
+###################################################################
+# Get data from NRCS SOAP webservice
+###################################################################
+
+def getDataFromNRCS (stationNumber, state, param, lookback, staType="SNTL"):
+  output = []
+  enddate = datetime.datetime.now()
+  startdate = enddate - datetime.timedelta(days=lookback)
+  _params = params.replace ("$ELEMENT$",param)
+  _params = _params.replace("$BEGINDATE$",startdate.strftime("%Y-%m-%d %H:%M"))
+  _params = _params.replace("$ENDDATE$",enddate.strftime("%Y-%m-%d %H:%M"))
+  _params = _params.replace("$TRIPLET$",stationNumber+":"+state+":"+staType)
+  #print _params
+  request = urllib.request.Request(config["wsURL"],_params.encode(),headers)
+  response = urllib.request.urlopen(request)
+  #print (response.info())
+  data = minidom.parseString(response.read())
+  for node in data.getElementsByTagName('values'):
+    curdate = datetime.datetime.strptime(node.getElementsByTagName('dateTime')[0].firstChild.nodeValue,"%Y-%m-%d %H:%M")
+    curtime = node.getElementsByTagName('value')[0].firstChild.nodeValue
+    output.append([curdate,curtime])
+  response.close()
+  return output
+
+def getDailyDataFromNRCS (stationNumber, state, param, lookback, staType="SNTL"):
+  output = []
+  enddate = datetime.datetime.now()
+  sd = enddate - datetime.timedelta(days=lookback)
+  startdate = datetime.datetime(sd.year,sd.month,sd.day)
+  _params ='''
+<?xml version="1.0" encoding="UTF-8"?>
+<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:q0="http://www.wcc.nrcs.usda.gov/ns/awdbWebService" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <SOAP-ENV:Body>
+    <q0:getData>
+      <stationTriplets>$TRIPLET$</stationTriplets>
+      <elementCd>$ELEMENT$</elementCd>
+      <ordinal>1</ordinal>
+      <duration>DAILY</duration>
+      <getFlags>false</getFlags>
+      <beginDate>$BEGINDATE$</beginDate>
+      <endDate>$ENDDATE$</endDate>
+    </q0:getData>
+  </SOAP-ENV:Body>
+</SOAP-ENV:Envelope>
+'''.strip()
+  _params = _params.replace ("$ELEMENT$",param)
+  _params = _params.replace("$BEGINDATE$",startdate.strftime("%Y-%m-%d %H:%M"))
+  _params = _params.replace("$ENDDATE$",enddate.strftime("%Y-%m-%d %H:%M"))
+  _params = _params.replace("$TRIPLET$",stationNumber+":"+state+":"+staType)
+  #print _params
+  request = urllib.request.Request(config["wsURL"],_params.encode(),headers)
+  response = urllib.request.urlopen(request)
+  #print (response.info())
+  data = minidom.parseString(response.read())
+  curdate = startdate
+  for node in data.getElementsByTagName('values'):
+    curval = node.firstChild.nodeValue
+    output.append([curdate,curval])
+    curdate += datetime.timedelta(days=1)
+  response.close()
+  return output
+
+
+def getMetaDataFromNRCS (stationNumber, state, staType):
+  output = ""
+  _params ='''
+<?xml version="1.0" encoding="UTF-8"?>
+<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:q0="http://www.wcc.nrcs.usda.gov/ns/awdbWebService" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <SOAP-ENV:Body>
+    <q0:getStationMetadata>
+      <stationTriplet>$TRIPLET$</stationTriplet>
+    </q0:getStationMetadata>
+  </SOAP-ENV:Body>
+</SOAP-ENV:Envelope>
+'''.strip()
+  _params = _params.replace("$TRIPLET$",stationNumber+":"+state+":"+staType)
+  request = urllib.request.Request(config["wsURL"],_params.encode(),headers)
+  response = urllib.request.urlopen(request)
+  output = response.read()
+  response.close()
+  dom = minidom.parseString(output)
+  d = {}
+  for node in dom.getElementsByTagName('return')[0].childNodes:
+    d[node.tagName]=node.firstChild.nodeValue
+  return json.dumps(d,sort_keys=True,indent=2, separators=(',', ': '))
+
+
+###################################################################
+# SHEF creation methods
+###################################################################
+
+def makeSHEFline (locID,timeObj,tz,PEcode,value):
+  output = ".A "+locID+" "+timeObj.strftime("%Y%m%d")+" "+tz+" DH"+timeObj.strftime("%H%M")+"/"+PEcode+" "+value
+  return output
+
+def makeSHEF (locID, PEcode, timeseries):
+  for line in timeseries:
+    print (makeSHEFline (locID, line[0],"P",PEcode,line[1]))
+
+def parsePEcodes (s):
+  output = []
+  while len(s) > 1:
+    output.append(s[:2])
+    s = s[2:]
+  return (output)
+
+#############
+#Begin Script
+#############
+if len(sys.argv) >= 4 and "metadata" in  sys.argv:
+  #(1)metadata (2)id (3)state (4)type
+  print (getMetaDataFromNRCS (sys.argv[2],sys.argv[3],sys.argv[4]))
+elif len(sys.argv) >= 6 and "daily" in sys.argv:
+  PElist = parsePEcodes(sys.argv[5])
+  lookback = int(sys.argv[6].upper().replace("DAYS",""))
+  for key in PElist:
+    if key in PEalias:
+      makeSHEF(sys.argv[4],SHEFalias[key],getDailyDataFromNRCS(sys.argv[2],sys.argv[3],PEalias[key],lookback))
+elif len(sys.argv) >= 5:
+  PElist = parsePEcodes(sys.argv[4])
+  lookback = int(sys.argv[5].upper().replace("DAYS",""))
+  for key in PElist:
+    if key in PEalias:
+      if not key in ["TN","TX"]:
+        makeSHEF(sys.argv[3],SHEFalias[key],getDataFromNRCS(sys.argv[1],sys.argv[2],PEalias[key],lookback))
+      else:
+        makeSHEF(sys.argv[3],SHEFalias[key],getDailyDataFromNRCS(sys.argv[1],sys.argv[2],PEalias[key],lookback))
+else:
+  print ("NOT ENOUGH COMMAND LINE PARAMETERS")
+  print (helpStr)
