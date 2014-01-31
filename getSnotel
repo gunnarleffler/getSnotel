@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 helpStr = '''
-getSnotel v2.1
-13 June 2013
+getSnotel v2.1.1
+31 January 2014
 Gunnar Leffler
 
 PURPOSE:
@@ -34,7 +34,7 @@ This returns metadata bout a requested snotel station in JSON format
 EXAMPLES:
 ---------
 REALTIME: getSnotel 302 OR ANRO SWSDPCTATXTN 3days
-DAILY   : getSnotel 302 OR ANRO SWSDPCTATXTN 3days
+DAILY   : getSnotel daily 302 OR ANRO SWSDPCTATXTN 3days
 METADATA: getSnotel metadata 304 OR SNTL
 
 '''
@@ -115,6 +115,7 @@ def getDailyDataFromNRCS (stationNumber, state, param, lookback, staType="SNTL")
       <getFlags>false</getFlags>
       <beginDate>$BEGINDATE$</beginDate>
       <endDate>$ENDDATE$</endDate>
+      <alwaysReturnDailyFeb29>false</alwaysReturnDailyFeb29>
     </q0:getData>
   </SOAP-ENV:Body>
 </SOAP-ENV:Envelope>
@@ -123,17 +124,21 @@ def getDailyDataFromNRCS (stationNumber, state, param, lookback, staType="SNTL")
   _params = _params.replace("$BEGINDATE$",startdate.strftime("%Y-%m-%d %H:%M"))
   _params = _params.replace("$ENDDATE$",enddate.strftime("%Y-%m-%d %H:%M"))
   _params = _params.replace("$TRIPLET$",stationNumber+":"+state+":"+staType)
-  #print _params
   request = urllib.request.Request(config["wsURL"],_params.encode(),headers)
   response = urllib.request.urlopen(request)
   #print (response.info())
   data = minidom.parseString(response.read())
   curdate = startdate
-  for node in data.getElementsByTagName('beginDate'):
-    curdate = datetime.datetime.strptime(node.firstChild.nodeValue,"%Y-%m-%d %H:%M:%S")
   for node in data.getElementsByTagName('values'):
-    curval = node.firstChild.nodeValue
-    output.append([curdate,curval])
+    try:
+      if node.childNodes.length > 0:
+        curval = node.firstChild.nodeValue
+        output.append([curdate,curval])
+      else:
+        output.append([curdate,"+"])
+    except:
+      output.append([curdate,"error"])
+      pass
     curdate += datetime.timedelta(days=1)
   response.close()
   return output
