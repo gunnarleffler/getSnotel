@@ -1,5 +1,9 @@
 getSnotel v2.1.1
-29 January 2014
+
+
+31 January 2014
+
+
 Gunnar Leffler
 
 PURPOSE:
@@ -36,5 +40,5 @@ This returns metadata about a requested snotel station in JSON format
 EXAMPLES:
 =========
     REALTIME: getSnotel 302 OR ANRO SWSDPCTATXTN 3days
-    DAILY   : getSnotel 302 OR ANRO SWSDPCTATXTN 3days
+    DAILY   : getSnotel daily 302 OR ANRO SWSDPCTATXTN 3days
     METADATA: getSnotel metadata 304 OR SNTL
