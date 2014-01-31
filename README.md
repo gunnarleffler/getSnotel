@@ -1,8 +1,6 @@
 getSnotel v2.1.1
 
-
 31 January 2014
-
 
 Gunnar Leffler
 
