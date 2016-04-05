@@ -1,6 +1,6 @@
-getSnotel v2.1.1
+getSnotel v2.2.0
 
-31 January 2014
+4 April 2016
 
 Gunnar Leffler
 
@@ -35,8 +35,14 @@ METADATA:
 
 This returns metadata about a requested snotel station in JSON format
 
+`getSnotel reservior <NRCS Snotel ID> <state code> <type>`
+
+This returns metadata about a requested reservoir in JSON format
+
 EXAMPLES:
 =========
-    REALTIME: getSnotel 302 OR ANRO SWSDPCTATXTN 3days
-    DAILY   : getSnotel daily 302 OR ANRO SWSDPCTATXTN 3days
-    METADATA: getSnotel metadata 304 OR SNTL
+    REALTIME : getSnotel 302 OR ANRO SWSDPCTATXTN 3days
+    DAILY    : getSnotel daily 302 OR ANRO SWSDPCTATXTN 3days
+    METADATA : getSnotel metadata 304 OR SNTL
+    RESERVOIR: getSnotel reservoir 06641500 WY BOR
+

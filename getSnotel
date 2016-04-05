@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 helpStr = '''
-getSnotel v2.1.1
-31 January 2014
+getSnotel v2.2.0
+4 April 2016
 Gunnar Leffler
 
 PURPOSE:
@@ -29,18 +29,20 @@ output is piped to Standard Out (STDOUT).
 METADATA:
 getSnotel metadata <NRCS Snotel ID> <state code> <type>
 
-This returns metadata bout a requested snotel station in JSON format
+This returns metadata about a requested snotel station in JSON format
 
 EXAMPLES:
 ---------
-REALTIME: getSnotel 302 OR ANRO SWSDPCTATXTN 3days
-DAILY   : getSnotel daily 302 OR ANRO SWSDPCTATXTN 3days
-METADATA: getSnotel metadata 304 OR SNTL
+REALTIME : getSnotel 302 OR ANRO SWSDPCTATXTN 3days
+DAILY    : getSnotel daily 302 OR ANRO SWSDPCTATXTN 3days
+METADATA : getSnotel metadata 304 OR SNTL
+RESERVOIR: getSnotel reservoir 06641500 WY BOR
 
 '''
 import urllib.request, time, datetime, sys, json
 import xml.dom.minidom as minidom
 
+debug = False
 
 ###################################################################
 # SOAP request and headers
@@ -53,7 +55,7 @@ headers = {
 
 #program configuration
 config = {
-"wsURL":"http://www.wcc.nrcs.usda.gov/awdbWebService/services?WSDL"
+"wsURL":"http://wcc.sc.egov.usda.gov/awdbWebService/services?WSDL"
 }
 #Alaiases between SHEF PE and NRCS "Element" codes
 PEalias={"SW":"WTEQ","SD":"SNWD","PC":"PREC","TA":"TOBS","TX":"TMAX","TN":"TMIN"}
@@ -86,10 +88,10 @@ def getDataFromNRCS (stationNumber, state, param, lookback, staType="SNTL"):
   _params = _params.replace("$BEGINDATE$",startdate.strftime("%Y-%m-%d %H:%M"))
   _params = _params.replace("$ENDDATE$",enddate.strftime("%Y-%m-%d %H:%M"))
   _params = _params.replace("$TRIPLET$",stationNumber+":"+state+":"+staType)
-  #print _params
+  if debug: print (_params) #
   request = urllib.request.Request(config["wsURL"],_params.encode(),headers)
   response = urllib.request.urlopen(request)
-  #print (response.info())
+  if debug: print (response.info()) #
   data = minidom.parseString(response.read())
   for node in data.getElementsByTagName('values'):
     curdate = datetime.datetime.strptime(node.getElementsByTagName('dateTime')[0].firstChild.nodeValue,"%Y-%m-%d %H:%M")
@@ -126,7 +128,7 @@ def getDailyDataFromNRCS (stationNumber, state, param, lookback, staType="SNTL")
   _params = _params.replace("$TRIPLET$",stationNumber+":"+state+":"+staType)
   request = urllib.request.Request(config["wsURL"],_params.encode(),headers)
   response = urllib.request.urlopen(request)
-  #print (response.info())
+  if debug: print (response.info())
   data = minidom.parseString(response.read())
   curdate = startdate
   for node in data.getElementsByTagName('values'):
@@ -143,29 +145,34 @@ def getDailyDataFromNRCS (stationNumber, state, param, lookback, staType="SNTL")
   response.close()
   return output
 
-def getMetaDataFromNRCS (stationNumber, state, staType):
+def getMetaDataFromNRCS (operation, stationNumber, state, staType):
   output = ""
   _params ='''
 <?xml version="1.0" encoding="UTF-8"?>
 <SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:q0="http://www.wcc.nrcs.usda.gov/ns/awdbWebService" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <SOAP-ENV:Body>
-    <q0:getStationMetadata>
+    <q0:get$OPERATION$Metadata>
       <stationTriplet>$TRIPLET$</stationTriplet>
-    </q0:getStationMetadata>
+    </q0:get$OPERATION$Metadata>
   </SOAP-ENV:Body>
 </SOAP-ENV:Envelope>
 '''.strip()
   _params = _params.replace("$TRIPLET$",stationNumber+":"+state+":"+staType)
+  _params = _params.replace("$OPERATION$",operation)
+  if debug: print (_params)
   request = urllib.request.Request(config["wsURL"],_params.encode(),headers)
   response = urllib.request.urlopen(request)
   output = response.read()
+  if debug: print (output)
   response.close()
   dom = minidom.parseString(output)
   d = {}
   for node in dom.getElementsByTagName('return')[0].childNodes:
-    d[node.tagName]=node.firstChild.nodeValue
+    try:
+      d[node.tagName]=node.firstChild.nodeValue
+    except:
+      d[node.tagName]=""
   return json.dumps(d,sort_keys=True,indent=2, separators=(',', ': '))
-
 
 ###################################################################
 # SHEF creation methods
@@ -191,7 +198,9 @@ def parsePEcodes (s):
 #############
 if len(sys.argv) >= 4 and "metadata" in  sys.argv:
   #(1)metadata (2)id (3)state (4)type
-  print (getMetaDataFromNRCS (sys.argv[2],sys.argv[3],sys.argv[4]))
+  print (getMetaDataFromNRCS ("Station",sys.argv[2],sys.argv[3],sys.argv[4]))
+elif len(sys.argv) >= 4 and "reservoir" in  sys.argv:
+  print (getMetaDataFromNRCS ("Reservoir",sys.argv[2],sys.argv[3],sys.argv[4]))
 elif len(sys.argv) >= 6 and "daily" in sys.argv:
   PElist = parsePEcodes(sys.argv[5])
   lookback = int(sys.argv[6].upper().replace("DAYS",""))
