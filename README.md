@@ -1,8 +1,8 @@
-getSnotel v2.2.0
+getSnotel v2.3.0
 
-4 April 2016
+17 July 2017
 
-Gunnar Leffler
+Author: Gunnar Leffler
 
 PURPOSE:
 ========
@@ -24,6 +24,7 @@ The SHEF PE codes can be in any order. Codes currently supported:
 *  SD - Snow Depth
 *  PC - Accumulated Precipitation to Date
 *  TA - Current Air Temperature
+*  TM - Average Temperature
 *  TX - Maximum Temperature
 *  TN - Minimum Temperature
 
@@ -39,10 +40,15 @@ This returns metadata about a requested snotel station in JSON format
 
 This returns metadata about a requested reservoir in JSON format
 
+FORECAST:
+---------
+getSnotel forecast <NRCS Snotel ID> <station id> <local station id> <physical element codes> <Query Days>
+
 EXAMPLES:
 =========
-    REALTIME : getSnotel 302 OR ANRO SWSDPCTATXTN 3days
-    DAILY    : getSnotel daily 302 OR ANRO SWSDPCTATXTN 3days
+    REALTIME : getSnotel 302 OR ANRO SWSDPCTATMTXTN 3days
+    DAILY    : getSnotel daily 302 OR ANRO SWSDPCTATMTXTN 3days
     METADATA : getSnotel metadata 304 OR SNTL
     RESERVOIR: getSnotel reservoir 06641500 WY BOR
+    FORECAST : getSnotel forecast 14362000 OR APLO SRVO APR-JUL 90DAYS
 
